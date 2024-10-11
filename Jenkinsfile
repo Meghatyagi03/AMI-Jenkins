@@ -11,7 +11,7 @@ pipeline {
         packerTemplate = 'packer-template.json'
         awsRegion = 'us-east-1'
         awsCredentialsId = 'Aws-cred'
-        gitCredentialsId = 'git-personal' 
+        gitCredentialsId = 'AMI' 
     }
 
     stages {
