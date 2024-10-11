@@ -7,12 +7,18 @@ pipeline {
         packerTemplate = 'packer-template.json'
         awsRegion = 'us-east-1'
         awsCredentialsId = 'Aws-cred'
+        gitCredentialsId = 'new-git-token' // Git token credential ID
     }
     
     stages {
         stage('Checkout GIT') {
             steps {
-                git url: "${gitRepo}", branch: "${branch}"
+                script {
+                    withCredentials([string(credentialsId: "${gitCredentialsId}", variable: 'GIT_TOKEN')]) {
+                        // Use the token to access the repo
+                        git url: "https://${GIT_TOKEN}@github.com/Meghatyagi03/AMI-Jenkins.git", branch: "${branch}"
+                    }
+                }
             }
         }
         
