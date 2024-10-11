@@ -2,61 +2,73 @@ pipeline {
     agent any
 
     environment {
-        gitRepo = 'https://github.com/Meghatyagi03/AMI-Jenkins.git' 
-        branch = 'main'
-        packerTemplate = 'packer-template.json'
-        awsRegion = 'us-east-1'
-        awsCredentialsId = 'Aws-cred'  // Use the correct AWS credentials ID here
-        gitCredentialsId = 'demo'
+        GIT_REPO = 'https://github.com/Meghatyagi03/AMI-Jenkins.git' // Updated repo URL
+        BRANCH = 'main'
+        PACKER_TEMPLATE = 'packer-template.json' // Provided Packer template
+        AWS_REGION = 'us-east-1' // Provided AWS region
+        AWS_CREDENTIALS_ID = 'Aws-cred' // Provided AWS credentials ID
+        GIT_CREDENTIALS_ID = 'demo' // Provided Git credentials ID
     }
 
     stages {
-        stage('Checkout GIT') {
+        stage('Cleanup Workspace') {
             steps {
-                script {
-                    withCredentials([string(credentialsId: "${gitCredentialsId}", variable: 'GIT_TOKEN')]) {
-                        git url: "https://${GIT_TOKEN}@github.com/Meghatyagi03/AMI-Jenkins.git", branch: "${branch}"
-                    }
-                }
+                echo 'Cleaning up workspace...'
+                deleteDir()
             }
         }
 
-        stage('Initialize Packer') {
+        stage('Checkout GIT') {
             steps {
-                script {
-                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${awsCredentialsId}"]]) {
-                        writeFile file: 'packer-config.pkr.hcl', text: '''
-packer {
-  required_plugins {
-    amazon = {
-      source  = "github.com/hashicorp/amazon"
-      version = "~> 1"
-    }
-  }
-}
-'''
-                        sh "packer init ."
-                    }
+                withCredentials([usernamePassword(credentialsId: "${GIT_CREDENTIALS_ID}", usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD')]) {
+                    sh """
+                    git clone https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/Meghatyagi03/AMI-Jenkins.git
+                    cd AMI-Jenkins
+                    git checkout ${BRANCH}
+                    """
                 }
             }
         }
 
         stage('Validate Packer Template') {
             steps {
-                script {
-                    sh "packer validate ${packerTemplate}"
-                }
+                sh "packer validate ${PACKER_TEMPLATE}"
             }
         }
 
         stage('Build AMI') {
             steps {
                 script {
-                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${awsCredentialsId}"]]) {
-                        sh """
-                        packer build -var 'aws_region=${awsRegion}' ${packerTemplate}
-                        """
-                    }
+                    echo 'Start building AMI...'
+                }
+                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${AWS_CREDENTIALS_ID}"]]) {
+                    sh '''
+                    packer init .
+                    packer build -var "region=${AWS_REGION}" ${PACKER_TEMPLATE}
+                    '''
+                }
+            }
+        }
+
+        stage('AMI Build Status') {
+            steps {
+                echo 'AMI build successful'
+            }
+        }
+    }
+
+    post {
+        success {
+            echo 'Build completed successfully!'
+        }
+        failure {
+            echo 'AMI build failed!'
+        }
+        always {
+            stage('Cleanup Workspace') {
+                steps {
+                    echo 'Final cleanup...'
+                    deleteDir()
                 }
             }
         }
