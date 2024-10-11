@@ -32,7 +32,11 @@ pipeline {
 
         stage('Validate Packer Template') {
             steps {
-                sh "packer validate ${PACKER_TEMPLATE}"
+                script {
+                    dir('AMI-Jenkins') { // Ensure the command runs in the cloned repo directory
+                        sh "packer validate ${PACKER_TEMPLATE}"
+                    }
+                }
             }
         }
 
@@ -40,12 +44,14 @@ pipeline {
             steps {
                 script {
                     echo 'Start building AMI...'
-                }
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${AWS_CREDENTIALS_ID}"]]) {
-                    sh '''
-                    packer init .
-                    packer build -var "region=${AWS_REGION}" ${PACKER_TEMPLATE}
-                    '''
+                    dir('AMI-Jenkins') { // Ensure the command runs in the cloned repo directory
+                        withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${AWS_CREDENTIALS_ID}"]]) {
+                            sh '''
+                            packer init .
+                            packer build -var "region=${AWS_REGION}" ${PACKER_TEMPLATE}
+                            '''
+                        }
+                    }
                 }
             }
         }
@@ -65,12 +71,8 @@ pipeline {
             echo 'AMI build failed!'
         }
         always {
-            stage('Cleanup Workspace') {
-                steps {
-                    echo 'Final cleanup...'
-                    deleteDir()
-                }
-            }
+            echo 'Final cleanup...'
+            deleteDir()
         }
     }
 }
