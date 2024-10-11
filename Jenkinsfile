@@ -1,17 +1,13 @@
 pipeline {
     agent any
 
-    tools {
-        git 'Default'  // Make sure the label matches the Git installation name
-    }
-
     environment {
         gitRepo = 'https://github.com/Meghatyagi03/AMI-Jenkins.git' 
         branch = 'main'
         packerTemplate = 'packer-template.json'
         awsRegion = 'us-east-1'
-        awsCredentialsId = 'Aws-cred'
-        gitCredentialsId = 'demo' 
+        awsCredentialsId = 'Aws-cred'  // Use the correct AWS credentials ID here
+        gitCredentialsId = 'demo'
     }
 
     stages {
@@ -25,6 +21,44 @@ pipeline {
             }
         }
 
-        // Other stages remain unchanged...
+        stage('Initialize Packer') {
+            steps {
+                script {
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${awsCredentialsId}"]]) {
+                        writeFile file: 'packer-config.pkr.hcl', text: '''
+packer {
+  required_plugins {
+    amazon = {
+      source  = "github.com/hashicorp/amazon"
+      version = "~> 1"
+    }
+  }
+}
+'''
+                        sh "packer init ."
+                    }
+                }
+            }
+        }
+
+        stage('Validate Packer Template') {
+            steps {
+                script {
+                    sh "packer validate ${packerTemplate}"
+                }
+            }
+        }
+
+        stage('Build AMI') {
+            steps {
+                script {
+                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${awsCredentialsId}"]]) {
+                        sh """
+                        packer build -var 'aws_region=${awsRegion}' ${packerTemplate}
+                        """
+                    }
+                }
+            }
+        }
     }
 }
